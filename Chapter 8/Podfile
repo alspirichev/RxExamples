@@ -1,0 +1,7 @@
+use_frameworks!
+
+target 'GitFeed' do
+  pod 'RxSwift', '~> 3.4'
+  pod 'RxCocoa', '~> 3.4'
+  pod 'Kingfisher', '~> 3.9.1'
+end
