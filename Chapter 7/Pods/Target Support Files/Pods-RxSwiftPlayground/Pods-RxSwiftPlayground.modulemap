@@ -1,0 +1,6 @@
+framework module Pods_RxSwiftPlayground {
+  umbrella header "Pods-RxSwiftPlayground-umbrella.h"
+
+  export *
+  module * { export * }
+}
