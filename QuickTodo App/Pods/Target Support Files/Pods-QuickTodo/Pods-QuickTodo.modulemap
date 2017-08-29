@@ -1,0 +1,6 @@
+framework module Pods_QuickTodo {
+  umbrella header "Pods-QuickTodo-umbrella.h"
+
+  export *
+  module * { export * }
+}

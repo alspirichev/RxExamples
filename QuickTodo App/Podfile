@@ -1,0 +1,12 @@
+use_frameworks!
+platform :ios, '9.0'
+
+target 'QuickTodo' do
+  pod 'RxSwift', '~> 3.4'
+  pod 'RxCocoa', '~> 3.4'
+  pod 'RealmSwift', '~> 2.7'
+  pod 'RxRealm', '~> 0.6'
+  pod 'RxDataSources', '~> 1.0.3'
+  pod 'Action', '~> 3.0'
+  pod 'NSObject+Rx', '~> 2.1'
+end
