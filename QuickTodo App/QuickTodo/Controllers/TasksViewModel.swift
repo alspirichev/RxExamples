@@ -59,6 +59,12 @@ struct TasksViewModel {
     }
   }(self)
 
+  lazy var deleteAction: Action<TaskItem, Void> = { (serviceType: TaskServiceType) in
+    return Action { item in
+      return serviceType.delete(task: item)
+    }
+  }(self.taskService)
+
   init(taskService: TaskServiceType, coordinator: SceneCoordinatorType) {
     self.taskService = taskService
     self.sceneCoordinator = coordinator

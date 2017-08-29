@@ -58,6 +58,13 @@ class TasksViewController: UIViewController, BindableType {
       }
       .subscribe(viewModel.editAction.inputs)
       .addDisposableTo(rx_disposeBag)
+
+    tableView.rx.itemDeleted
+      .map { [unowned self] indexPath in
+        try! self.dataSource.model(at: indexPath) as! TaskItem
+      }
+      .subscribe(viewModel.deleteAction.inputs)
+      .addDisposableTo(rx_disposeBag)
   }
 
   fileprivate func configureDataSource() {
