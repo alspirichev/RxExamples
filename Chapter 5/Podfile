@@ -1,7 +1,8 @@
-use_frameworks!
+platform :ios, '11.0'
 
 target 'RxSwiftPlayground' do
-  pod 'RxSwift',    '~> 3.0'
+	use_frameworks!
+	pod 'RxSwift',    '~> 4.0'
 end
 
 post_install do |installer|

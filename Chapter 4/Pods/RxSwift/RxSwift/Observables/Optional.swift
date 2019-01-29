@@ -6,7 +6,7 @@
 //  Copyright © 2016 Krunoslav Zaher. All rights reserved.
 //
 
-extension Observable {
+extension ObservableType {
     /**
      Converts a optional to an observable sequence.
 
@@ -25,7 +25,7 @@ extension Observable {
      - seealso: [from operator on reactivex.io](http://reactivex.io/documentation/operators/from.html)
 
      - parameter optional: Optional element in the resulting observable sequence.
-     - parameter: Scheduler to send the optional element on.
+     - parameter scheduler: Scheduler to send the optional element on.
      - returns: An observable sequence containing the wrapped value or not from given optional.
      */
     public static func from(optional: E?, scheduler: ImmediateSchedulerType) -> Observable<E> {

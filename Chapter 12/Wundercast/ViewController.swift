@@ -50,7 +50,7 @@ class ViewController: UIViewController {
       .subscribe(onNext: {
         self.mapView.isHidden = !self.mapView.isHidden
       })
-      .addDisposableTo(bag)
+      .disposed(by: bag)
 
     let currentLocation = locationManager.rx.didUpdateLocations
       .map { locations in
@@ -77,7 +77,7 @@ class ViewController: UIViewController {
 
     let searchInput = searchCityName.rx.controlEvent(.editingDidEndOnExit).asObservable()
       .map { self.searchCityName.text }
-      .filter { ($0 ?? "").characters.count > 0 }
+      .filter { ($0 ?? "").count > 0 }
 
     let textSearch = searchInput.flatMap { text in
       return APIController.shared.currentWeather(city: text ?? "Error")
@@ -97,10 +97,6 @@ class ViewController: UIViewController {
     let search = Observable.from([geoSearch, textSearch, mapSearch])
       .merge()
       .asDriver(onErrorJustReturn: APIController.Weather.dummy)
-
-    search.map { [$0.overlay()] }
-      .drive(mapView.rx.overlays)
-      .addDisposableTo(bag)
 
     let running = Observable.from([
       searchInput.map { _ in true },
@@ -150,7 +146,7 @@ class ViewController: UIViewController {
       .addDisposableTo(bag)
 
     mapView.rx.setDelegate(self)
-      .addDisposableTo(bag)
+      .disposed(by: bag)
   }
 
   override func viewDidAppear(_ animated: Bool) {

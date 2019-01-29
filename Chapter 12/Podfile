@@ -1,7 +1,8 @@
+platform :ios, '11.0'
 use_frameworks!
 
 target 'Wundercast' do
-    pod 'RxSwift', '~> 3.4'
-    pod 'RxCocoa', '~> 3.4'
+	pod 'RxSwift', '~> 4.0'
+    pod 'RxCocoa', '~> 4.0'
     pod 'SwiftyJSON'
 end

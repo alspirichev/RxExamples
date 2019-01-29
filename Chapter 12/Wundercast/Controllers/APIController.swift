@@ -30,8 +30,10 @@ import MapKit
 class APIController {
 
   static var shared = APIController()
-  private let apiKey = "197d815bb621986c704668dde0b27e5d"
   let baseURL = URL(string: "http://api.openweathermap.org/data/2.5")!
+
+  #warning("Create you own on https://home.openweathermap.org/users/sign_up")
+  private let apiKey = "197d815bb621986c704668dde0b27e5d"
 
   init() {
     Logging.URLRequests = { request in
@@ -136,17 +138,6 @@ class APIController {
       return CLLocationCoordinate2D(latitude: lat, longitude: lon)
     }
 
-    func overlay() -> Overlay {
-      let coordinates: [CLLocationCoordinate2D] = [
-        CLLocationCoordinate2D(latitude: lat - 0.25, longitude: lon - 0.25),
-        CLLocationCoordinate2D(latitude: lat + 0.25, longitude: lon + 0.25)
-      ]
-      let points = coordinates.map { MKMapPointForCoordinate($0) }
-      let rects = points.map { MKMapRect(origin: $0, size: MKMapSize(width: 0, height: 0)) }
-      let fittingRect = rects.reduce(MKMapRectNull, MKMapRectUnion)
-      return Overlay(icon: icon, coordinate: coordinate, boundingMapRect: fittingRect)
-    }
-
     public class Overlay: NSObject, MKOverlay {
       var coordinate: CLLocationCoordinate2D
       var boundingMapRect: MKMapRect
@@ -215,15 +206,10 @@ public func iconNameToChar(icon: String) -> String {
 
 fileprivate func imageFromText(text: NSString, font: UIFont) -> UIImage {
 
-  let size = text.size(attributes: [NSFontAttributeName: font])
+  let size = text.size(withAttributes: [NSAttributedString.Key.font: font])
+  UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
 
-  if (UIGraphicsBeginImageContextWithOptions != nil) {
-    UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-  } else {
-    UIGraphicsBeginImageContext(size)
-  }
-
-  text.draw(at: CGPoint(x: 0, y:0), withAttributes: [NSFontAttributeName: font])
+  text.draw(at: CGPoint(x: 0, y:0), withAttributes: [NSAttributedString.Key.font: font])
 
   let image = UIGraphicsGetImageFromCurrentImageContext()
   UIGraphicsEndImageContext()

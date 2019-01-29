@@ -24,6 +24,7 @@ import Foundation
 import RealmSwift
 import RxDataSources
 
+@objcMembers
 class TaskItem: Object {
   dynamic var uid: Int = 0
   dynamic var title: String = ""

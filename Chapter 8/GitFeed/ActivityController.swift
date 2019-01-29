@@ -56,23 +56,23 @@ class ActivityController: UITableViewController {
     refreshControl.addTarget(self, action: #selector(refresh), for: .valueChanged)
 
     let eventsArray = (NSArray(contentsOf: eventsFileURL)) as? [[String: Any]] ?? []
-    events.value = eventsArray.flatMap(Event.init)
+    events.value = eventsArray.compactMap(Event.init)
 
     lastModified.value = try? NSString(contentsOf: modifiedFileURL, usedEncoding: nil)
 
     refresh()
   }
 
-  func refresh() {
+    @objc func refresh() {
     DispatchQueue.global(qos: .background).async {
       self.fetchEvents(repo: self.repo)
     }
   }
 
   func fetchEvents(repo: String) {
-    let response = Observable.from(["https://api.github.com/search/repositories?q=language:swift&per_page=5"])
+    let response = Observable.from(["https://api.github.com/repos/\(repo)"])
       .map { urlString -> URL in
-        return URL(string: "https://api.github.com/repos/\(urlString)/events")!
+        return URL(string: "\(urlString)/events")!
       }
       .map { [weak self] url -> URLRequest in
         var request = URLRequest(url: url)
@@ -81,10 +81,10 @@ class ActivityController: UITableViewController {
         }
         return request
       }
-      .flatMap { request -> Observable<(HTTPURLResponse, Data)> in
+      .flatMap { request in
         return URLSession.shared.rx.response(request: request)
       }
-      .shareReplay(1)
+      .share(replay: 1)
 
     response
       .filter { response, _ in
@@ -101,7 +101,7 @@ class ActivityController: UITableViewController {
         return objects.count > 0
       }
       .map { objects in
-        return objects.flatMap(Event.init)
+        return objects.compactMap(Event.init)
       }
       .subscribe(onNext: { [weak self] newEvents in
         self?.processEvents(newEvents)

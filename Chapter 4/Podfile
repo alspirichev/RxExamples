@@ -1,8 +1,10 @@
-use_frameworks!
+platform :ios, '11.0'
 
 target 'Combinestagram' do
-    pod 'RxSwift', '~> 3.4'
-    pod 'ReactiveCocoa'
+    use_frameworks!
+    
+    pod 'RxSwift', '~> 4.0'
+    pod 'ReactiveCocoa', '~> 8.0'
 end
 
 
@@ -12,8 +14,7 @@ post_install do |installer|
     if target.name == 'RxSwift'
       target.build_configurations.each do |config|
         if config.name == 'Debug'
-          config.build_settings['OTHER_SWIFT_FLAGS'] ||= ['-D',
-          'TRACE_RESOURCES']
+          config.build_settings['OTHER_SWIFT_FLAGS'] ||= ['-D', 'TRACE_RESOURCES']
         end
       end
     end

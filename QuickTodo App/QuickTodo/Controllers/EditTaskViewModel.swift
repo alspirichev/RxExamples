@@ -36,9 +36,10 @@ struct EditTaskViewModel {
     onUpdate = updateAction
     onCancel = CocoaAction {
       if let cancelAction = cancelAction {
-        cancelAction.execute()
+        cancelAction.execute(())
       }
-      return coordinator.pop()
+      coordinator.pop()
+      return .empty()
     }
 
     onUpdate.executionObservables
@@ -46,6 +47,6 @@ struct EditTaskViewModel {
       .subscribe(onNext: { _ in
         coordinator.pop()
       })
-      .addDisposableTo(disposeBag)
+      .disposed(by: disposeBag)
   }
 }

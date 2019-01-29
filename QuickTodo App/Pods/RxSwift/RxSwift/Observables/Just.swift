@@ -6,7 +6,7 @@
 //  Copyright © 2015 Krunoslav Zaher. All rights reserved.
 //
 
-extension Observable {
+extension ObservableType {
     /**
      Returns an observable sequence that contains a single element.
 
@@ -25,7 +25,7 @@ extension Observable {
      - seealso: [just operator on reactivex.io](http://reactivex.io/documentation/operators/just.html)
 
      - parameter element: Single element in the resulting observable sequence.
-     - parameter: Scheduler to send the single element on.
+     - parameter scheduler: Scheduler to send the single element on.
      - returns: An observable sequence containing the single specified element.
      */
     public static func just(_ element: E, scheduler: ImmediateSchedulerType) -> Observable<E> {

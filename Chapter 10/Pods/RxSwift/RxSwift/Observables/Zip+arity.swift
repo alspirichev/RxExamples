@@ -11,7 +11,7 @@
 
 // 2
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -64,8 +64,8 @@ final class ZipSink2_<E1, E2, O: ObserverType> : ZipSink<O> {
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -121,7 +121,7 @@ final class Zip2<E1, E2, R> : Producer<R> {
 
 // 3
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -175,9 +175,9 @@ final class ZipSink3_<E1, E2, E3, O: ObserverType> : ZipSink<O> {
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -239,7 +239,7 @@ final class Zip3<E1, E2, E3, R> : Producer<R> {
 
 // 4
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -294,10 +294,10 @@ final class ZipSink4_<E1, E2, E3, E4, O: ObserverType> : ZipSink<O> {
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
-        case 3: return _values4.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
+        case 3: return !_values4.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -365,7 +365,7 @@ final class Zip4<E1, E2, E3, E4, R> : Producer<R> {
 
 // 5
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -421,11 +421,11 @@ final class ZipSink5_<E1, E2, E3, E4, E5, O: ObserverType> : ZipSink<O> {
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
-        case 3: return _values4.count > 0
-        case 4: return _values5.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
+        case 3: return !_values4.isEmpty
+        case 4: return !_values5.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -499,7 +499,7 @@ final class Zip5<E1, E2, E3, E4, E5, R> : Producer<R> {
 
 // 6
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -556,12 +556,12 @@ final class ZipSink6_<E1, E2, E3, E4, E5, E6, O: ObserverType> : ZipSink<O> {
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
-        case 3: return _values4.count > 0
-        case 4: return _values5.count > 0
-        case 5: return _values6.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
+        case 3: return !_values4.isEmpty
+        case 4: return !_values5.isEmpty
+        case 5: return !_values6.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -641,7 +641,7 @@ final class Zip6<E1, E2, E3, E4, E5, E6, R> : Producer<R> {
 
 // 7
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -699,13 +699,13 @@ final class ZipSink7_<E1, E2, E3, E4, E5, E6, E7, O: ObserverType> : ZipSink<O> 
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
-        case 3: return _values4.count > 0
-        case 4: return _values5.count > 0
-        case 5: return _values6.count > 0
-        case 6: return _values7.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
+        case 3: return !_values4.isEmpty
+        case 4: return !_values5.isEmpty
+        case 5: return !_values6.isEmpty
+        case 6: return !_values7.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")
@@ -791,7 +791,7 @@ final class Zip7<E1, E2, E3, E4, E5, E6, E7, R> : Producer<R> {
 
 // 8
 
-extension Observable {
+extension ObservableType {
     /**
     Merges the specified observable sequences into one observable sequence by using the selector function whenever all of the observable sequences have produced an element at a corresponding index.
 
@@ -850,14 +850,14 @@ final class ZipSink8_<E1, E2, E3, E4, E5, E6, E7, E8, O: ObserverType> : ZipSink
 
     override func hasElements(_ index: Int) -> Bool {
         switch (index) {
-        case 0: return _values1.count > 0
-        case 1: return _values2.count > 0
-        case 2: return _values3.count > 0
-        case 3: return _values4.count > 0
-        case 4: return _values5.count > 0
-        case 5: return _values6.count > 0
-        case 6: return _values7.count > 0
-        case 7: return _values8.count > 0
+        case 0: return !_values1.isEmpty
+        case 1: return !_values2.isEmpty
+        case 2: return !_values3.isEmpty
+        case 3: return !_values4.isEmpty
+        case 4: return !_values5.isEmpty
+        case 5: return !_values6.isEmpty
+        case 6: return !_values7.isEmpty
+        case 7: return !_values8.isEmpty
 
         default:
             rxFatalError("Unhandled case (Function)")

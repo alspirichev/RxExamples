@@ -45,14 +45,18 @@ NSError *RLMMakeError(RLMError code, std::exception const& exception);
 NSError *RLMMakeError(RLMError code, const realm::util::File::AccessError&);
 NSError *RLMMakeError(RLMError code, const realm::RealmFileException&);
 NSError *RLMMakeError(std::system_error const& exception);
-NSError *RLMMakeError(NSException *exception);
 
 void RLMSetErrorOrThrow(NSError *error, NSError **outError);
 
 // returns if the object can be inserted as the given type
 BOOL RLMIsObjectValidForProperty(id obj, RLMProperty *prop);
 // throw an exception if the object is not a valid value for the property
-void RLMValidateValueForProperty(id obj, RLMProperty *prop);
+void RLMValidateValueForProperty(id obj, RLMObjectSchema *objectSchema,
+                                 RLMProperty *prop, bool validateObjects=false);
+BOOL RLMValidateValue(id value, RLMPropertyType type, bool optional, bool array,
+                      NSString *objectClassName);
+
+void RLMThrowTypeError(id obj, RLMObjectSchema *objectSchema, RLMProperty *prop);
 
 // gets default values for the given schema (+defaultPropertyValues)
 // merges with native property defaults if Swift class
@@ -78,15 +82,19 @@ static inline T *RLMDynamicCast(__unsafe_unretained id obj) {
     return nil;
 }
 
-template<typename T>
-static inline T RLMCoerceToNil(__unsafe_unretained T obj) {
+static inline id RLMCoerceToNil(__unsafe_unretained id obj) {
     if (static_cast<id>(obj) == NSNull.null) {
         return nil;
     }
     else if (__unsafe_unretained auto optional = RLMDynamicCast<RLMOptionalBase>(obj)) {
-        return RLMCoerceToNil(optional.underlyingValue);
+        return RLMCoerceToNil(RLMGetOptional(optional));
     }
     return obj;
+}
+
+template<typename T>
+static inline T RLMCoerceToNil(__unsafe_unretained T obj) {
+    return RLMCoerceToNil(static_cast<id>(obj));
 }
 
 // String conversion utilities
@@ -107,7 +115,7 @@ static inline realm::StringData RLMStringDataWithNSString(__unsafe_unretained NS
     static_assert(sizeof(size_t) >= sizeof(NSUInteger),
                   "Need runtime overflow check for NSUInteger to size_t conversion");
     return realm::StringData(string.UTF8String,
-                               [string lengthOfBytesUsingEncoding:NSUTF8StringEncoding]);
+                             [string lengthOfBytesUsingEncoding:NSUTF8StringEncoding]);
 }
 
 // Binary conversion utilities
@@ -134,6 +142,8 @@ static inline NSDate *RLMTimestampToNSDate(realm::Timestamp ts) NS_RETURNS_RETAI
 }
 
 static inline realm::Timestamp RLMTimestampForNSDate(__unsafe_unretained NSDate *const date) {
+    if (!date)
+        return {};
     auto timeInterval = date.timeIntervalSinceReferenceDate;
     if (isnan(timeInterval))
         return {0, 0}; // Arbitrary choice

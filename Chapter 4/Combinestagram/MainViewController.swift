@@ -102,7 +102,7 @@ class MainViewController: UIViewController {
         return newImage.size.width > newImage.size.height
       })
       .filter({ [weak self] newImage in
-        let len = UIImagePNGRepresentation(newImage)?.count ?? 0
+        let len = newImage.pngData()?.count ?? 0
         guard self?.imageCache.contains(len) == false
           else { return false }
         self?.imageCache.append(len)
@@ -119,10 +119,10 @@ class MainViewController: UIViewController {
     navigationController!.pushViewController(photosViewController, animated: true)
 
     newPhotos
-      .subscribe(onCompleted: { [weak self] in
-        self?.updateNavigationIcon()
-      })
-    .addDisposableTo(photosViewController.bag)
+        .subscribe(onCompleted: { [weak self] in
+            self?.updateNavigationIcon()
+        })
+        .disposed(by: photosViewController.bag)
   }
 
   private func updateNavigationIcon() {

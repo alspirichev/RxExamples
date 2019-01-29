@@ -6,9 +6,7 @@
 //  Copyright © 2015 Krunoslav Zaher. All rights reserved.
 //
 
-#if !RX_NO_MODULE
 import RxSwift
-#endif
 
 /// Protocol that enables extension of `ControlProperty`.
 public protocol ControlPropertyType : ObservableType, ObserverType {
@@ -21,7 +19,7 @@ public protocol ControlPropertyType : ObservableType, ObserverType {
     Trait for `Observable`/`ObservableType` that represents property of UI element.
  
     Sequence of values only represents initial control value and user initiated value changes.
-    Programatic value changes won't be reported.
+    Programmatic value changes won't be reported.
 
     It's properties are:
 
@@ -40,7 +38,7 @@ public protocol ControlPropertyType : ObservableType, ObserverType {
     **If they aren't, then using this trait communicates wrong properties and could potentially break someone's code.**
 
     **In case `values` observable sequence that is being passed into initializer doesn't satisfy all enumerated
-    properties, please don't use this unit.**
+    properties, please don't use this trait.**
 */
 public struct ControlProperty<PropertyType> : ControlPropertyType {
     public typealias E = PropertyType
@@ -71,12 +69,12 @@ public struct ControlProperty<PropertyType> : ControlPropertyType {
     /// `ControlEvent` of user initiated value changes. Every time user updates control value change event
     /// will be emitted from `changed` event.
     ///
-    /// Programatic changes to control value won't be reported.
+    /// Programmatic changes to control value won't be reported.
     ///
     /// It contains all control property values except for first one.
     ///
     /// The name only implies that sequence element will be generated once user changes a value and not that
-    /// adjacent sequence values need to be different (e.g. because of interaction between programatic and user updates,
+    /// adjacent sequence values need to be different (e.g. because of interaction between programmatic and user updates,
     /// or for any other reason).
     public var changed: ControlEvent<PropertyType> {
         get {
@@ -102,7 +100,7 @@ public struct ControlProperty<PropertyType> : ControlPropertyType {
     public func on(_ event: Event<E>) {
         switch event {
         case .error(let error):
-            bindingErrorToInterface(error)
+            bindingError(error)
         case .next:
             _valueSink.on(event)
         case .completed:

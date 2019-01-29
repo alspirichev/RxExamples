@@ -288,18 +288,12 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 	fileprivate func concurrent(limit: UInt) -> Signal<Value.Value, Error> {
 		precondition(limit > 0, "The concurrent limit must be greater than zero.")
 
-		return Signal<Value.Value, Error> { relayObserver in
-			let disposable = CompositeDisposable()
-			let relayDisposable = CompositeDisposable()
-
-			disposable += relayDisposable
-			disposable += self.observeConcurrent(relayObserver, limit, relayDisposable)
-
-			return disposable
+		return Signal<Value.Value, Error> { relayObserver, lifetime in
+			lifetime += self.observeConcurrent(relayObserver, limit, lifetime)
 		}
 	}
 
-	fileprivate func observeConcurrent(_ observer: Signal<Value.Value, Error>.Observer, _ limit: UInt, _ disposable: CompositeDisposable) -> Disposable? {
+	fileprivate func observeConcurrent(_ observer: Signal<Value.Value, Error>.Observer, _ limit: UInt, _ lifetime: Lifetime) -> Disposable? {
 		let state = Atomic(ConcurrentFlattenState<Value.Value, Error>(limit: limit))
 
 		func startNextIfNeeded() {
@@ -308,7 +302,7 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 				let deinitializer = ScopedDisposable(AnyDisposable(producerState.deinitialize))
 
 				producer.startWithSignal { signal, inner in
-					let handle = disposable.add(inner)
+					let handle = lifetime += inner
 
 					signal.observe { event in
 						switch event {
@@ -329,7 +323,7 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 							}
 
 						case .value, .failed:
-							observer.action(event)
+							observer.send(event)
 						}
 					}
 				}
@@ -371,12 +365,10 @@ extension SignalProducer where Value: SignalProducerConvertible, Error == Value.
 		precondition(limit > 0, "The concurrent limit must be greater than zero.")
 
 		return SignalProducer<Value.Value, Error> { relayObserver, lifetime in
-			self.startWithSignal { signal, signalDisposable in
-				let disposables = CompositeDisposable()
-				lifetime.observeEnded(signalDisposable.dispose)
-				lifetime.observeEnded(disposables.dispose)
+			self.startWithSignal { signal, interruptHandle in
+				lifetime += interruptHandle
 
-				_ = signal.observeConcurrent(relayObserver, limit, disposables)
+				_ = signal.observeConcurrent(relayObserver, limit, lifetime)
 			}
 		}
 	}
@@ -391,9 +383,20 @@ extension SignalProducer {
 	/// - returns: A producer that will start `self` and then on completion of
 	///            `self` - will start `next`.
 	public func concat(_ next: SignalProducer<Value, Error>) -> SignalProducer<Value, Error> {
-		return SignalProducer<SignalProducer<Value, Error>, Error>([ self.producer, next ]).flatten(.concat)
+		return SignalProducer<SignalProducer<Value, Error>, Error>([ self, next ]).flatten(.concat)
 	}
-	
+
+	/// `concat`s `next` onto `self`.
+	///
+	/// - parameters:
+	///   - next: A follow-up producer to concat `self` with.
+	///
+	/// - returns: A producer that will start `self` and then on completion of
+	///            `self` - will start `next`.
+	public func concat<Next: SignalProducerConvertible>(_ next: Next) -> SignalProducer<Value, Error> where Next.Value == Value, Next.Error == Error {
+		return concat(next.producer)
+	}
+
 	/// `concat`s `value` onto `self`.
 	///
 	/// - parameters:
@@ -402,20 +405,42 @@ extension SignalProducer {
 	/// - returns: A producer that, when started, will emit own values and on
 	///            completion will emit a `value`.
 	public func concat(value: Value) -> SignalProducer<Value, Error> {
-		return self.concat(SignalProducer(value: value))
+		return concat(SignalProducer(value: value))
 	}
-	
+
+	/// `concat`s `error` onto `self`.
+	///
+	/// - parameters:
+	///   - error: An error to concat onto `self`.
+	///
+	/// - returns: A producer that, when started, will emit own values and on
+	///            completion will emit an `error`.
+	public func concat(error: Error) -> SignalProducer<Value, Error> {
+		return concat(SignalProducer(error: error))
+	}
+
 	/// `concat`s `self` onto initial `previous`.
 	///
 	/// - parameters:
 	///   - previous: A producer to start before `self`.
 	///
 	/// - returns: A signal producer that, when started, first emits values from
-    ///            `previous` producer and then from `self`.
+	///            `previous` producer and then from `self`.
 	public func prefix(_ previous: SignalProducer<Value, Error>) -> SignalProducer<Value, Error> {
 		return previous.concat(self)
 	}
-	
+
+	/// `concat`s `self` onto initial `previous`.
+	///
+	/// - parameters:
+	///   - previous: A producer to start before `self`.
+	///
+	/// - returns: A signal producer that, when started, first emits values from
+	///            `previous` producer and then from `self`.
+	public func prefix<Previous: SignalProducerConvertible>(_ previous: Previous) -> SignalProducer<Value, Error> where Previous.Value == Value, Previous.Error == Error {
+		return prefix(previous.producer)
+	}
+
 	/// `concat`s `self` onto initial `value`.
 	///
 	/// - parameters:
@@ -424,7 +449,7 @@ extension SignalProducer {
 	/// - returns: A producer that, when started, first emits `value`, then all
     ///            values emited by `self`.
 	public func prefix(value: Value) -> SignalProducer<Value, Error> {
-		return self.prefix(SignalProducer(value: value))
+		return prefix(SignalProducer(value: value))
 	}
 }
 
@@ -433,10 +458,10 @@ private final class ConcurrentFlattenState<Value, Error: Swift.Error> {
 
 	/// The limit of active producers.
 	let limit: UInt
-	
+
 	/// The number of active producers.
 	var activeCount: UInt = 0
-	
+
 	/// The producers waiting to be started.
 	var queue: [Producer] = []
 
@@ -451,7 +476,7 @@ private final class ConcurrentFlattenState<Value, Error: Swift.Error> {
 	init(limit: UInt) {
 		self.limit = limit
 	}
-	
+
 	/// Dequeue the next producer if one should be started.
 	///
 	/// - returns: The `Producer` to start or `nil` if no producer should be
@@ -494,14 +519,14 @@ extension Signal {
 	/// values from each of them, and complete when all of them have completed.
 	///
 	/// - parameters:
-    ///   - signals: A list of signals to merge.
+	///   - signals: A list of signals to merge.
 	public static func merge(_ signals: Signal<Value, Error>...) -> Signal<Value, Error> {
 		return Signal.merge(signals)
 	}
 }
 
 extension SignalProducer {
-	/// Merges the given producers into a single `SignalProducer` that will emit
+ 	/// Merges the given producers into a single `SignalProducer` that will emit
 	/// all values from each of them, and complete when all of them have
 	/// completed.
 	///
@@ -511,15 +536,50 @@ extension SignalProducer {
 	{
 		return SignalProducer<Seq.Iterator.Element, NoError>(producers).flatten(.merge)
 	}
-	
-	/// Merges the given producers into a single `SignalProducer` that will emit
-	/// all values from each of them, and complete when all of them have
-	/// completed.
-	///
-	/// - parameters:
-	///   - producers: A sequence of producers to merge.
-	public static func merge(_ producers: SignalProducer<Value, Error>...) -> SignalProducer<Value, Error> {
-		return SignalProducer.merge(producers)
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible>(_ a: A, _ b: B) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible, F: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E, _ f: F) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error, F.Value == Value, F.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer, f.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible, F: SignalProducerConvertible, G: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E, _ f: F, _ g: G) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error, F.Value == Value, F.Error == Error, G.Value == Value, G.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer, f.producer, g.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible, F: SignalProducerConvertible, G: SignalProducerConvertible, H: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E, _ f: F, _ g: G, _ h: H) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error, F.Value == Value, F.Error == Error, G.Value == Value, G.Error == Error, H.Value == Value, H.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer, f.producer, g.producer, h.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible, F: SignalProducerConvertible, G: SignalProducerConvertible, H: SignalProducerConvertible, I: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E, _ f: F, _ g: G, _ h: H, _ i: I) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error, F.Value == Value, F.Error == Error, G.Value == Value, G.Error == Error, H.Value == Value, H.Error == Error, I.Value == Value, I.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer, f.producer, g.producer, h.producer, i.producer])
+	}
+
+	/// Merge the values of all the given producers, in the manner described by `merge(_:)`.
+	public static func merge<A: SignalProducerConvertible, B: SignalProducerConvertible, C: SignalProducerConvertible, D: SignalProducerConvertible, E: SignalProducerConvertible, F: SignalProducerConvertible, G: SignalProducerConvertible, H: SignalProducerConvertible, I: SignalProducerConvertible, J: SignalProducerConvertible>(_ a: A, _ b: B, _ c: C, _ d: D, _ e: E, _ f: F, _ g: G, _ h: H, _ i: I, _ j: J) -> SignalProducer<Value, Error> where A.Value == Value, A.Error == Error, B.Value == Value, B.Error == Error, C.Value == Value, C.Error == Error, D.Value == Value, D.Error == Error, E.Value == Value, E.Error == Error, F.Value == Value, F.Error == Error, G.Value == Value, G.Error == Error, H.Value == Value, H.Error == Error, I.Value == Value, I.Error == Error, J.Value == Value, J.Error == Error {
+		return SignalProducer.merge([a.producer, b.producer, c.producer, d.producer, e.producer, f.producer, g.producer, h.producer, i.producer, j.producer])
 	}
 }
 
@@ -533,14 +593,10 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 	/// - note: The returned signal completes when `signal` and the latest inner
 	///         signal have both completed.
 	fileprivate func switchToLatest() -> Signal<Value.Value, Error> {
-		return Signal<Value.Value, Error> { observer in
-			let composite = CompositeDisposable()
+		return Signal<Value.Value, Error> { observer, lifetime in
 			let serial = SerialDisposable()
-
-			composite += serial
-			composite += self.observeSwitchToLatest(observer, serial)
-
-			return composite
+			lifetime += serial
+			lifetime += self.observeSwitchToLatest(observer, serial)
 		}
 	}
 
@@ -592,7 +648,7 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 							}
 
 						case .value, .failed:
-							observer.action(event)
+							observer.send(event)
 						}
 					}
 				}
@@ -618,25 +674,22 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 }
 
 extension SignalProducer where Value: SignalProducerConvertible, Error == Value.Error {
-	/// - warning: An error sent on `signal` or the latest inner signal will be
-	///            sent on the returned signal.
+	/// - warning: An error sent on `self` or the latest inner producer will be
+	///            sent on the returned producer.
 	///
-	/// - note: The returned signal completes when `signal` and the latest inner
-	///         signal have both completed.
+	/// - note: The returned producer completes when `self` and the latest inner
+	///         producer have both completed.
 	///
-	/// - returns: A signal that forwards values from the latest signal sent on
-	///            `signal`, ignoring values sent on previous inner signal.
+	/// - returns: A producer that forwards values from the latest producer sent
+	///            on `self`, ignoring values sent on previous inner producer.
 	fileprivate func switchToLatest() -> SignalProducer<Value.Value, Error> {
 		return SignalProducer<Value.Value, Error> { observer, lifetime in
 			let latestInnerDisposable = SerialDisposable()
-			lifetime.observeEnded(latestInnerDisposable.dispose)
+			lifetime += latestInnerDisposable
 
 			self.startWithSignal { signal, signalDisposable in
-				lifetime.observeEnded(signalDisposable.dispose)
-
-				if let disposable = signal.observeSwitchToLatest(observer, latestInnerDisposable) {
-					lifetime.observeEnded(disposable.dispose)
-				}
+				lifetime += signalDisposable
+				lifetime += signal.observeSwitchToLatest(observer, latestInnerDisposable)
 			}
 		}
 	}
@@ -645,7 +698,7 @@ extension SignalProducer where Value: SignalProducerConvertible, Error == Value.
 private struct LatestState<Value, Error: Swift.Error> {
 	var outerSignalComplete: Bool = false
 	var innerSignalComplete: Bool = true
-	
+
 	var replacingInnerSignal: Bool = false
 }
 
@@ -658,14 +711,10 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 	///
 	/// The returned signal completes when `self` and the winning inner signal have both completed.
 	fileprivate func race() -> Signal<Value.Value, Error> {
-		return Signal<Value.Value, Error> { observer in
-			let composite = CompositeDisposable()
+		return Signal<Value.Value, Error> { observer, lifetime in
 			let relayDisposable = CompositeDisposable()
-
-			composite += relayDisposable
-			composite += self.observeRace(observer, relayDisposable)
-
-			return composite
+			lifetime += relayDisposable
+			lifetime += self.observeRace(observer, relayDisposable)
 		}
 	}
 
@@ -720,7 +769,7 @@ extension Signal where Value: SignalProducerConvertible, Error == Value.Error {
 							}
 
 						case .value, .failed, .interrupted:
-							observer.action(event)
+							observer.send(event)
 						}
 					}
 				}
@@ -756,14 +805,11 @@ extension SignalProducer where Value: SignalProducerConvertible, Error == Value.
 	fileprivate func race() -> SignalProducer<Value.Value, Error> {
 		return SignalProducer<Value.Value, Error> { observer, lifetime in
 			let relayDisposable = CompositeDisposable()
-			lifetime.observeEnded(relayDisposable.dispose)
+			lifetime += relayDisposable
 
 			self.startWithSignal { signal, signalDisposable in
-				lifetime.observeEnded(signalDisposable.dispose)
-
-				if let disposable = signal.observeRace(observer, relayDisposable) {
-					lifetime.observeEnded(disposable.dispose)
-				}
+				lifetime += signalDisposable
+				lifetime += signal.observeRace(observer, relayDisposable)
 			}
 		}
 	}
@@ -787,10 +833,40 @@ extension Signal {
 	///	  - strategy: Strategy used when flattening signals.
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
-	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, Error> where Inner.Error == Error {
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, Error>) -> Signal<U, Error>{
 		return map(transform).flatten(strategy)
 	}
-	
+
+	/// Maps each event from `signal` to a new signal, then flattens the
+	/// resulting producers (into a signal of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If `signal` or any of the created producers fail, the
+	///            returned signal will forward that failure immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, Error> where Inner.Error == Error {
+		return flatMap(strategy) { transform($0).producer }
+	}
+
+	/// Maps each event from `signal` to a new signal, then flattens the
+	/// resulting producers (into a signal of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If `signal` fails, the returned signal will forward that
+	///            failure immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, NoError>) -> Signal<U, Error> {
+		return map(transform).flatten(strategy)
+	}
+
 	/// Maps each event from `signal` to a new signal, then flattens the
 	/// resulting producers (into a signal of values), according to the
 	/// semantics of the given strategy.
@@ -803,7 +879,7 @@ extension Signal {
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
 	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, Error> where Inner.Error == NoError {
-		return map(transform).flatten(strategy)
+		return flatMap(strategy) { transform($0).producer }
 	}
 }
 
@@ -819,10 +895,37 @@ extension Signal where Error == NoError {
 	///	  - strategy: Strategy used when flattening signals.
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
-	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, Inner.Error> {
+	public func flatMap<U, F>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, F>) -> Signal<U, F> {
 		return map(transform).flatten(strategy)
 	}
-	
+
+	/// Maps each event from `signal` to a new signal, then flattens the
+	/// resulting signals (into a signal of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If any of the created signals emit an error, the returned
+	///            signal will forward that error immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, Inner.Error> {
+		return flatMap(strategy) { transform($0).producer }
+	}
+
+	/// Maps each event from `signal` to a new signal, then flattens the
+	/// resulting signals (into a signal of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, NoError>) -> Signal<U, NoError> {
+		return map(transform).flatten(strategy)
+	}
+
 	/// Maps each event from `signal` to a new signal, then flattens the
 	/// resulting signals (into a signal of values), according to the
 	/// semantics of the given strategy.
@@ -832,7 +935,7 @@ extension Signal where Error == NoError {
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
 	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> Signal<Inner.Value, NoError> where Inner.Error == NoError {
-		return map(transform).flatten(strategy)
+		return flatMap(strategy) { transform($0).producer }
 	}
 }
 
@@ -848,10 +951,40 @@ extension SignalProducer {
 	///	  - strategy: Strategy used when flattening signals.
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
-	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Error> where Inner.Error == Error {
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, Error>) -> SignalProducer<U, Error> {
 		return map(transform).flatten(strategy)
 	}
-	
+
+	/// Maps each event from `self` to a new producer, then flattens the
+	/// resulting producers (into a producer of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If `self` or any of the created producers fail, the returned
+	///            producer will forward that failure immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Error> where Inner.Error == Error {
+		return flatMap(strategy) { transform($0).producer }
+	}
+
+	/// Maps each event from `self` to a new producer, then flattens the
+	/// resulting producers (into a producer of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If `self` fails, the returned producer will forward that
+	///            failure immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, NoError>) -> SignalProducer<U, Error> {
+		return map(transform).flatten(strategy)
+	}
+
 	/// Maps each event from `self` to a new producer, then flattens the
 	/// resulting producers (into a producer of values), according to the
 	/// semantics of the given strategy.
@@ -864,7 +997,7 @@ extension SignalProducer {
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
 	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Error> where Inner.Error == NoError {
-		return map(transform).flatten(strategy)
+		return flatMap(strategy) { transform($0).producer }
 	}
 }
 
@@ -877,10 +1010,37 @@ extension SignalProducer where Error == NoError {
 	///	  - strategy: Strategy used when flattening signals.
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
-	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Error> where Inner.Error == Error {
+	public func flatMap<U>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, Error>) -> SignalProducer<U, Error> {
 		return map(transform).flatten(strategy)
 	}
-	
+
+	/// Maps each event from `self` to a new producer, then flattens the
+	/// resulting producers (into a producer of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Error> where Inner.Error == Error {
+		return flatMap(strategy) { transform($0).producer }
+	}
+
+	/// Maps each event from `self` to a new producer, then flattens the
+	/// resulting producers (into a producer of values), according to the
+	/// semantics of the given strategy.
+	///
+	/// - warning: If any of the created producers fail, the returned producer
+	///            will forward that failure immediately.
+	///
+	/// - parameters:
+	///	  - strategy: Strategy used when flattening signals.
+	///   - transform: A closure that takes a value emitted by `self` and
+	///                returns a signal producer with transformed value.
+	public func flatMap<U, F>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> SignalProducer<U, F>) -> SignalProducer<U, F> {
+		return map(transform).flatten(strategy)
+	}
+
 	/// Maps each event from `self` to a new producer, then flattens the
 	/// resulting producers (into a producer of values), according to the
 	/// semantics of the given strategy.
@@ -893,10 +1053,9 @@ extension SignalProducer where Error == NoError {
 	///   - transform: A closure that takes a value emitted by `self` and
 	///                returns a signal producer with transformed value.
 	public func flatMap<Inner: SignalProducerConvertible>(_ strategy: FlattenStrategy, _ transform: @escaping (Value) -> Inner) -> SignalProducer<Inner.Value, Inner.Error> {
-		return map(transform).flatten(strategy)
+		return flatMap(strategy) { transform($0).producer }
 	}
 }
-
 
 extension Signal {
 	/// Catches any failure that may occur on the input signal, mapping to a new
@@ -906,18 +1065,31 @@ extension Signal {
 	///   - transform: A closure that accepts emitted error and returns a signal
 	///                producer with a different type of error.
 	public func flatMapError<F>(_ transform: @escaping (Error) -> SignalProducer<Value, F>) -> Signal<Value, F> {
-		return Signal<Value, F> { observer in
-			self.observeFlatMapError(transform, observer, SerialDisposable())
+		return Signal<Value, F> { observer, lifetime in
+			lifetime += self.observeFlatMapError(transform, observer, SerialDisposable())
 		}
 	}
 
-	fileprivate func observeFlatMapError<F>(_ handler: @escaping (Error) -> SignalProducer<Value, F>, _ observer: Signal<Value, F>.Observer, _ serialDisposable: SerialDisposable) -> Disposable? {
+	/// Catches any failure that may occur on the input signal, mapping to a new
+	/// producer that starts in its place.
+	///
+	/// - parameters:
+	///   - transform: A closure that accepts emitted error and returns a signal
+	///                producer with a different type of error.
+	public func flatMapError<Inner: SignalProducerConvertible>(_ transform: @escaping (Error) -> Inner) -> Signal<Value, Inner.Error> where Inner.Value == Value {
+		return flatMapError { transform($0).producer }
+	}
+
+	fileprivate func observeFlatMapError<Inner: SignalProducerConvertible>(
+		_ handler: @escaping (Error) -> Inner,
+		_ observer: Signal<Value, Inner.Error>.Observer,
+		_ serialDisposable: SerialDisposable) -> Disposable? where Inner.Value == Value {
 		return self.observe { event in
 			switch event {
 			case let .value(value):
 				observer.send(value: value)
 			case let .failed(error):
-				handler(error).startWithSignal { signal, disposable in
+				handler(error).producer.startWithSignal { signal, disposable in
 					serialDisposable.inner = disposable
 					signal.observe(observer)
 				}
@@ -940,7 +1112,7 @@ extension SignalProducer {
 	public func flatMapError<F>(_ transform: @escaping (Error) -> SignalProducer<Value, F>) -> SignalProducer<Value, F> {
 		return SignalProducer<Value, F> { observer, lifetime in
 			let serialDisposable = SerialDisposable()
-			lifetime.observeEnded(serialDisposable.dispose)
+			lifetime += serialDisposable
 
 			self.startWithSignal { signal, signalDisposable in
 				serialDisposable.inner = signalDisposable
@@ -948,5 +1120,15 @@ extension SignalProducer {
 				_ = signal.observeFlatMapError(transform, observer, serialDisposable)
 			}
 		}
+	}
+
+	/// Catches any failure that may occur on the input producer, mapping to a
+	/// new producer that starts in its place.
+	///
+	/// - parameters:
+	///   - transform: A closure that accepts emitted error and returns a signal
+	///                producer with a different type of error.
+	public func flatMapError<Inner: SignalProducerConvertible>(_ transform: @escaping (Error) -> Inner) -> SignalProducer<Value, Inner.Error> where Inner.Value == Value {
+		return flatMapError { transform($0).producer }
 	}
 }

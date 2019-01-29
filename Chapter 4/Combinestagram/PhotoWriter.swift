@@ -33,7 +33,7 @@ class PhotoWriter: NSObject {
     self.callback = callBack
   }
 
-  func image(_ image: UIImage, didFinishSavingWithError error: NSError?, contextInfo: UnsafeRawPointer) {
+    @objc func image(_ image: UIImage, didFinishSavingWithError error: NSError?, contextInfo: UnsafeRawPointer) {
     callback(error)
   }
 

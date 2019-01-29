@@ -24,36 +24,37 @@ import UIKit
 import RxSwift
 import RxCocoa
 
-class RxNavigationControllerDelegateProxy: DelegateProxy, DelegateProxyType, UINavigationControllerDelegate {
-
-  static func currentDelegateFor(_ object: AnyObject) -> AnyObject? {
-    guard let navigationController = object as? UINavigationController else {
-      fatalError()
-    }
-    return navigationController.delegate
-  }
-
-  static func setCurrentDelegate(_ delegate: AnyObject?, toObject object: AnyObject) {
-    guard let navigationController = object as? UINavigationController else {
-      fatalError()
-    }
-    if delegate == nil {
-      navigationController.delegate = nil
-    } else {
-      guard let delegate = delegate as? UINavigationControllerDelegate else {
-        fatalError()
-      }
-      navigationController.delegate = delegate
-    }
-  }
+extension UINavigationController {
+    public typealias Delegate = UINavigationControllerDelegate
 }
 
-extension Reactive where Base: UINavigationController {
-  /**
-     Reactive wrapper for `delegate`.
-     For more information take a look at `DelegateProxyType` protocol documentation.
-     */
-  public var delegate: DelegateProxy {
-    return RxNavigationControllerDelegateProxy.proxyForObject(base)
-  }
+/// For more information take a look at `DelegateProxyType`.
+open class RxNavigationControllerDelegateProxy
+    : DelegateProxy<UINavigationController, UINavigationControllerDelegate>
+    , DelegateProxyType
+, UINavigationControllerDelegate {
+    
+    /// Typed parent object.
+    public weak private(set) var navigationController: UINavigationController?
+    
+    /// - parameter navigationController: Parent object for delegate proxy.
+    public init(navigationController: ParentObject) {
+        self.navigationController = navigationController
+        super.init(parentObject: navigationController, delegateProxy: RxNavigationControllerDelegateProxy.self)
+    }
+    
+    // Register known implementations
+    public static func registerKnownImplementations() {
+        self.register { RxNavigationControllerDelegateProxy(navigationController: $0) }
+    }
 }
+
+//extension Reactive where Base: UINavigationController {
+//  /**
+//     Reactive wrapper for `delegate`.
+//     For more information take a look at `DelegateProxyType` protocol documentation.
+//     */
+//  public var delegate: DelegateProxy<AnyObject, Any> {
+//    return RxNavigationControllerDelegateProxy.proxyForObject(base)
+//  }
+//}

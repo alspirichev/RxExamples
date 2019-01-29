@@ -33,7 +33,17 @@ namespace {
 
 void unregisterRefreshHandle(const std::weak_ptr<SyncUser>& user, const std::string& path) {
     if (auto strong_user = user.lock()) {
-        std::static_pointer_cast<CocoaSyncUserContext>(strong_user->binding_context())->unregister_refresh_handle(path);
+        context_for(strong_user).unregister_refresh_handle(path);
+    }
+}
+
+void reportInvalidAccessToken(const std::weak_ptr<SyncUser>& user, NSError *error) {
+    if (auto strong_user = user.lock()) {
+        if (RLMUserErrorReportingBlock block = context_for(strong_user).error_handler()) {
+            RLMSyncUser *theUser = [[RLMSyncUser alloc] initWithSyncUser:std::move(strong_user)];
+            [theUser logOut];
+            block(theUser, error);
+        }
     }
 }
 
@@ -123,7 +133,6 @@ static const NSTimeInterval RLMRefreshBuffer = 10;
 
 /// Handler for network requests whose responses successfully parse into an auth response model.
 - (BOOL)_handleSuccessfulRequest:(RLMAuthResponseModel *)model {
-    // Success
     std::shared_ptr<SyncSession> session = _session.lock();
     if (!session) {
         // The session is dead or in a fatal error state.
@@ -131,46 +140,41 @@ static const NSTimeInterval RLMRefreshBuffer = 10;
         [self invalidate];
         return NO;
     }
-    bool success = session->state() != SyncSession::PublicState::Error;
-    if (success) {
-        // Calculate the resolved path.
-        NSString *resolvedURLString = nil;
-        RLMServerPath resolvedPath = model.accessToken.tokenData.path;
-        // Munge the path back onto the original URL, because the `sync` API expects an entire URL.
-        NSURLComponents *urlBuffer = [NSURLComponents componentsWithURL:self.realmURL
-                                                resolvingAgainstBaseURL:YES];
-        urlBuffer.path = resolvedPath;
-        resolvedURLString = [[urlBuffer URL] absoluteString];
-        if (!resolvedURLString) {
-            @throw RLMException(@"Resolved path returned from the server was invalid (%@).", resolvedPath);
-        }
-        // Pass the token and resolved path to the underlying sync subsystem.
-        session->refresh_access_token([model.accessToken.token UTF8String], {resolvedURLString.UTF8String});
-        success = session->state() != SyncSession::PublicState::Error;
-        if (success) {
-            // Schedule a refresh. If we're successful we must already have `bind()`ed the session
-            // initially, so we can null out the strong pointer.
-            _strongSession = nullptr;
-            NSDate *expires = [NSDate dateWithTimeIntervalSince1970:model.accessToken.tokenData.expires];
-            [self scheduleRefreshTimer:expires];
-        } else {
-            // The session is dead or in a fatal error state.
-            unregisterRefreshHandle(_user, _path);
-            [self invalidate];
-        }
+
+    // Calculate the resolved path.
+    NSString *resolvedURLString = nil;
+    RLMServerPath resolvedPath = model.accessToken.tokenData.path;
+    // Munge the path back onto the original URL, because the `sync` API expects an entire URL.
+    NSURLComponents *urlBuffer = [NSURLComponents componentsWithURL:self.realmURL
+                                            resolvingAgainstBaseURL:YES];
+    urlBuffer.path = resolvedPath;
+    resolvedURLString = [[urlBuffer URL] absoluteString];
+    if (!resolvedURLString) {
+        @throw RLMException(@"Resolved path returned from the server was invalid (%@).", resolvedPath);
     }
+    // Pass the token and resolved path to the underlying sync subsystem.
+    session->refresh_access_token([model.accessToken.token UTF8String], {resolvedURLString.UTF8String});
+
+    // Schedule a refresh. If we're successful we must already have `bind()`ed the session
+    // initially, so we can null out the strong pointer.
+    _strongSession = nullptr;
+    NSDate *expires = [NSDate dateWithTimeIntervalSince1970:model.accessToken.tokenData.expires];
+    [self scheduleRefreshTimer:expires];
+
     if (self.completionBlock) {
-        self.completionBlock(success ? nil : make_auth_error_client_issue());
+        self.completionBlock(nil);
     }
-    return success;
+    return true;
 }
 
 /// Handler for network requests that failed before the JSON parsing stage.
-- (BOOL)_handleFailedRequest:(NSError *)error {
+- (void)_handleFailedRequest:(NSError *)error {
     NSError *authError;
     if ([error.domain isEqualToString:RLMSyncAuthErrorDomain]) {
         // Network client may return sync related error
         authError = error;
+        // Try to report this error to the expiration callback.
+        reportInvalidAccessToken(_user, authError);
     } else {
         // Something else went wrong
         authError = make_auth_error_bad_response();
@@ -198,16 +202,19 @@ static const NSTimeInterval RLMRefreshBuffer = 10;
     }
     if (!nextTryDate) {
         // This error isn't a network failure error. Just invalidate the refresh handle and stop.
+        if (_strongSession) {
+            _strongSession->log_out();
+        }
         unregisterRefreshHandle(_user, _path);
         [self invalidate];
-        return NO;
+        return;
     }
     // If we tried to initially bind the session and failed, we'll try again. However, each
     // subsequent attempt will use a weak pointer to avoid prolonging the session's lifetime
     // unnecessarily.
     _strongSession = nullptr;
     [self scheduleRefreshTimer:nextTryDate];
-    return NO;
+    return;
 }
 
 /// Callback handler for network requests.
@@ -222,15 +229,16 @@ static const NSTimeInterval RLMRefreshBuffer = 10;
         // Otherwise, malformed JSON
         unregisterRefreshHandle(_user, _path);
         [self.timer invalidate];
+        NSError *error = make_sync_error(make_auth_error_bad_response(json));
         if (self.completionBlock) {
             self.completionBlock(error);
         }
-        [[RLMSyncManager sharedManager] _fireError:make_sync_error(make_auth_error_bad_response(json))];
-        return NO;
+        [[RLMSyncManager sharedManager] _fireError:error];
     } else {
         REALM_ASSERT(error);
-        return [self _handleFailedRequest:error];
+        [self _handleFailedRequest:error];
     }
+    return NO;
 }
 
 - (void)_timerFired:(__unused NSTimer *)timer {
@@ -258,6 +266,8 @@ static const NSTimeInterval RLMRefreshBuffer = 10;
     [RLMNetworkClient sendRequestToEndpoint:[RLMSyncAuthEndpoint endpoint]
                                      server:self.authServerURL
                                        JSON:json
+                                    timeout:60
+                                    options:[[RLMSyncManager sharedManager] networkRequestOptions]
                                  completion:handler];
 }
 

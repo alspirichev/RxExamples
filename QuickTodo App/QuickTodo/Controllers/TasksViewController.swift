@@ -33,56 +33,53 @@ class TasksViewController: UIViewController, BindableType {
   @IBOutlet var newTaskButton: UIBarButtonItem!
   
   var viewModel: TasksViewModel!
-  let dataSource = RxTableViewSectionedAnimatedDataSource<TaskSection>()
+  let disposeBag = DisposeBag()
   
   override func viewDidLoad() {
     super.viewDidLoad()
     
-    tableView.rowHeight = UITableViewAutomaticDimension
+    tableView.rowHeight = UITableView.automaticDimension
     tableView.estimatedRowHeight = 60
 
     setEditing(true, animated: false)
-    configureDataSource()
   }
   
   func bindViewModel() {
     newTaskButton.rx.action = viewModel.onCreateTask()
+    
+    let dataSource = RxTableViewSectionedAnimatedDataSource<TaskSection>(configureCell: { [weak self] _, tableView, indexPath, item in
+        let cell = tableView.dequeueReusableCell(withIdentifier: "TaskItemCell", for: indexPath) as! TaskItemTableViewCell
+        
+        if let strongSelf = self {
+            cell.configure(with: item, action: strongSelf.viewModel.onToggle(task: item))
+        }
+        
+        return cell
+    })
+    
+    dataSource.titleForHeaderInSection = { dataSource, index in
+        dataSource.sectionModels[index].model
+    }
+    
+    dataSource.canEditRowAtIndexPath = { _,_  in return true }
 
     viewModel.sectionedItems
       .bind(to: tableView.rx.items(dataSource: dataSource))
-      .addDisposableTo(self.rx_disposeBag)
+      .disposed(by: self.disposeBag)
 
     tableView.rx.itemSelected
       .map { [unowned self] indexPath in
-        try! self.dataSource.model(at: indexPath) as! TaskItem
+        try! dataSource.model(at: indexPath) as! TaskItem
       }
       .subscribe(viewModel.editAction.inputs)
-      .addDisposableTo(rx_disposeBag)
+      .disposed(by: disposeBag)
 
     tableView.rx.itemDeleted
       .map { [unowned self] indexPath in
-        try! self.dataSource.model(at: indexPath) as! TaskItem
+        try! dataSource.model(at: indexPath) as! TaskItem
       }
       .subscribe(viewModel.deleteAction.inputs)
-      .addDisposableTo(rx_disposeBag)
-  }
-
-  fileprivate func configureDataSource() {
-    dataSource.titleForHeaderInSection = { dataSource, index in
-      dataSource.sectionModels[index].model
-    }
-
-    dataSource.configureCell = { [weak self] dataSource, tableView, indexPath, item in
-      let cell = tableView.dequeueReusableCell(withIdentifier: "TaskItemCell", for: indexPath) as! TaskItemTableViewCell
-
-      if let strongSelf = self {
-        cell.configure(with: item, action: strongSelf.viewModel.onToggle(task: item))
-      }
-
-      return cell
-    }
-
-    dataSource.canEditRowAtIndexPath = { _ in return true }
+      .disposed(by: disposeBag)
   }
   
 }

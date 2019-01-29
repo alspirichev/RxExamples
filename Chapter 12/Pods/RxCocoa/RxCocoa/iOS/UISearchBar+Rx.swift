@@ -8,31 +8,16 @@
 
 #if os(iOS) || os(tvOS)
 
-#if !RX_NO_MODULE
 import RxSwift
-#endif
 import UIKit
-
-
-#if os(iOS)
-    extension UISearchBar {
-        /// Factory method that enables subclasses to implement their own `delegate`.
-        ///
-        /// - returns: Instance of delegate proxy that wraps `delegate`.
-        public func createRxDelegateProxy() -> RxSearchBarDelegateProxy {
-            return RxSearchBarDelegateProxy(parentObject: self)
-        }
-        
-    }
-#endif
 
 extension Reactive where Base: UISearchBar {
 
     /// Reactive wrapper for `delegate`.
     ///
     /// For more information take a look at `DelegateProxyType` protocol documentation.
-    public var delegate: DelegateProxy {
-        return RxSearchBarDelegateProxy.proxyForObject(base)
+    public var delegate: DelegateProxy<UISearchBar, UISearchBarDelegate> {
+        return RxSearchBarDelegateProxy.proxy(for: base)
     }
 
     /// Reactive wrapper for `text` property.
@@ -44,15 +29,18 @@ extension Reactive where Base: UISearchBar {
     public var value: ControlProperty<String?> {
         let source: Observable<String?> = Observable.deferred { [weak searchBar = self.base as UISearchBar] () -> Observable<String?> in
             let text = searchBar?.text
+
+            let textDidChange = (searchBar?.rx.delegate.methodInvoked(#selector(UISearchBarDelegate.searchBar(_:textDidChange:))) ?? Observable.empty())
+            let didEndEditing = (searchBar?.rx.delegate.methodInvoked(#selector(UISearchBarDelegate.searchBarTextDidEndEditing(_:))) ?? Observable.empty())
             
-            return (searchBar?.rx.delegate.methodInvoked(#selector(UISearchBarDelegate.searchBar(_:textDidChange:))) ?? Observable.empty())
+            return Observable.merge(textDidChange, didEndEditing)
                     .map { a in
-                        return a[1] as? String
+                        return searchBar?.text ?? ""
                     }
                     .startWith(text)
         }
 
-        let bindingObserver = UIBindingObserver(UIElement: self.base) { (searchBar, text: String?) in
+        let bindingObserver = Binder(self.base) { (searchBar, text: String?) in
             searchBar.text = text
         }
         
@@ -71,7 +59,7 @@ extension Reactive where Base: UISearchBar {
                 .startWith(index)
         }
         
-        let bindingObserver = UIBindingObserver(UIElement: self.base) { (searchBar, index: Int) in
+        let bindingObserver = Binder(self.base) { (searchBar, index: Int) in
             searchBar.selectedScopeButtonIndex = index
         }
         

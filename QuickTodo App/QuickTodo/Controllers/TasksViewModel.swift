@@ -55,7 +55,8 @@ struct TasksViewModel {
       let editViewModel = EditTaskViewModel(task: task,
                                             coordinator: this.sceneCoordinator,
                                             updateAction: this.onUpdateTitle(task: task))
-      return this.sceneCoordinator.transition(to: Scene.editTask(editViewModel), type: .modal)
+      this.sceneCoordinator.transition(to: Scene.editTask(editViewModel), type: .modal)
+      return .empty()
     }
   }(self)
 
@@ -79,7 +80,8 @@ struct TasksViewModel {
                                                 coordinator: self.sceneCoordinator,
                                                 updateAction: self.onUpdateTitle(task: task),
                                                 cancelAction: self.onDelete(task: task))
-          return self.sceneCoordinator.transition(to: Scene.editTask(editViewModel), type: .modal)
+         self.sceneCoordinator.transition(to: Scene.editTask(editViewModel), type: .modal)
+         return .empty()
         })
     }
   }

@@ -33,6 +33,7 @@ class EditTaskViewController: UIViewController, BindableType {
   @IBOutlet var cancelButton: UIBarButtonItem!
 
   var viewModel: EditTaskViewModel!
+  let disposeBag = DisposeBag()
 
   func bindViewModel() {
     titleView.text = viewModel.itemTitle
@@ -41,7 +42,7 @@ class EditTaskViewController: UIViewController, BindableType {
     okButton.rx.tap
       .withLatestFrom(titleView.rx.text.orEmpty)
       .subscribe(viewModel.onUpdate.inputs)
-      .addDisposableTo(rx_disposeBag)
+      .disposed(by: disposeBag)
   }
 
   override func viewDidAppear(_ animated: Bool) {
