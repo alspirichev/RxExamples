@@ -5,6 +5,8 @@
 These are my test playgrounds for the book "RxSwift: Reactive Programming with Swift" :fire:
 
 * Swift 4.2
+* RxSwift 4.0
+* RxCocoa 4.0
 * Xcode 10.1
 
 ### Overview:
