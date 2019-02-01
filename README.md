@@ -1,6 +1,6 @@
 # ![][logo] RxExamples: 
 
-[logo]: https://github.com/adam-p/markdown-here/raw/master/src/common/images/icon48.png
+[logo]: https://github.com/alspirichev/RxExamples/blob/master/Resources/swift36.png
 
 These are my test playgrounds for the book "RxSwift: Reactive Programming with Swift" :fire:
 
@@ -8,8 +8,7 @@ These are my test playgrounds for the book "RxSwift: Reactive Programming with S
 
 ##### Section I: Getting Started with RxSwift
 
-* Chapter 1-3: (link to rep)
-
+* [Chapter 1-3:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%201-3)
 	- Creating observables</br>
 		- empty
 		- Never
@@ -24,12 +23,12 @@ These are my test playgrounds for the book "RxSwift: Reactive Programming with S
 		- ReplaySubject
 		- Variable
 
-* Chapter 4: ((link to rep))
+* [Chapter 4:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%204)
 	- Observables and Subjects in Practice (Combinestagram App)
 
 ##### Section II: Operators and Best Practices
 
-* Chapter 5: (link to rep)
+* [Chapter 5:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%205)
 	- Filtering Operators:
 		- ignoreElements()
 		- elementAt()
@@ -43,7 +42,7 @@ These are my test playgrounds for the book "RxSwift: Reactive Programming with S
 		- distinctUntilChanged()
 		- distinctUntilChanged(\_:)
 
-* Chapter 7:
+* [Chapter 7:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%207)
 	- Transforming Operators:
 		- toArray()
 		- map()
@@ -51,10 +50,10 @@ These are my test playgrounds for the book "RxSwift: Reactive Programming with S
 		- flatMap()
 		- flatMapLatest()
 
-* Chapter 8:
+* [Chapter 8:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%208)
 	- Transforming Operators in Practice (GitFeed App)
 
-* Chapter 9:
+* [Chapter 9:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%209)
 	- Combining Operators:
 		- startWith()
 		- concat()
@@ -67,17 +66,17 @@ These are my test playgrounds for the book "RxSwift: Reactive Programming with S
 		- reduce()
 		- scan()
 
-* Chapter 10:
+* [Chapter 10:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%2010)
 	- Combining Operators in Practice (OurPlanet App)
 
 ##### Section III: iOS Apps with RxCocoa
 
-* Chapter 12:
+* [Chapter 12:](https://github.com/alspirichev/RxExamples/tree/master/Chapter%2012)
 	- Beginning RxCocoa (Wundercast app)
 
 ##### Section VI: Putting it All Together
 
-* Chapter 24:
+* [Chapter 24:](https://github.com/alspirichev/RxExamples/tree/master/QuickTodo%20App)
 	- Building a Complete RxSwift App (QuickTodo App)
 
 
